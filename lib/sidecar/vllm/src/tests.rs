@@ -1237,6 +1237,17 @@ fn discovery_rejects_incompatible_model_metadata() {
     }
 }
 
+// Until the released proto exposes local ownership, a nonzero starting rank
+// must still fail discovery rather than register an assumed complete group.
+#[test]
+fn discovery_rejects_nonzero_dp_start_without_local_size() {
+    let mut server = server_info();
+    let parallelism = server.parallelism.as_mut().unwrap();
+    parallelism.data_parallel_size = 8;
+    parallelism.data_parallel_rank = 4;
+    assert!(DiscoveredModel::from_proto(model_info(), server).is_err());
+}
+
 #[test]
 fn engine_config_normalizes_total_kv_blocks_per_dp_rank() {
     let mut server = server_info();

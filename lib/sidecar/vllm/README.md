@@ -140,7 +140,11 @@ The RL endpoint, engine routes, and raw HTTP compatibility surface are administr
 
 The sidecar discovers `model_id`, the served name, context length, KV capacity, scheduler limits, data-parallel topology, and KV-event sources through `vllm.Control`. `model_id` must be readable locally or fetchable by Dynamo for tokenization and chat templates. Parser defaults are not advertised because the current inference protocol cannot preserve all parser-related request semantics.
 
-The sidecar currently supports one vLLM frontend hosting the complete data-parallel group starting at rank 0. Control reports the global size; Dynamo forwards the selected rank as `x-data-parallel-rank` gRPC metadata on each generation request. Partial and hybrid rank ownership are unsupported because the protocol does not report the locally hosted rank count, and a nonzero starting rank is rejected. When KV routing is enabled, Control must return one unique ZMQ event source for every rank in the group.
+The sidecar currently supports one vLLM frontend hosting the complete data-parallel group starting at rank 0. Dynamo forwards the selected absolute rank as `x-data-parallel-rank` gRPC metadata. When KV routing is enabled, Control must return one unique ZMQ event source for every locally hosted rank.
+
+Local-range registration, KV-capacity normalization, and KV-source validation are prepared for hybrid ownership, but discovery still treats the local count as unknown because the released `vllm-proto` dependency does not expose `ParallelismInfo.data_parallel_size_local`. Hybrid deployments remain unsupported, and a nonzero starting rank is rejected. Upgrading the vLLM server alone does not enable hybrid discovery.
+
+After a crate release containing [vLLM #57116](https://github.com/vllm-project/vllm/pull/57116), update the dependency and replace the zero local-size argument in `DiscoveredModel::from_proto` with the upstream field. Zero retains complete-group behavior only at starting rank 0. A frontend reporting global size 8, local size 4, and starting rank 4 will then register ranks 4–7 and normalize aggregate KV capacity by four, while model world size remains global. Validate discovery, rank forwarding, and KV-source coverage over gRPC when enabling that hookup.
 
 Aggregated serving is the default. The sidecar role is configured explicitly because the current Control API does not report it:
 
